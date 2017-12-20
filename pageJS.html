@@ -1,0 +1,1573 @@
+<link rel="stylesheet" href="/sites/all/libraries/leaflet/leaflet.css"/>
+<script src="/sites/all/libraries/leaflet/leaflet.js"></script>
+<link rel="stylesheet" type="text/css" href="/sites/all/libraries/js/datatables/media/css/jquery.dataTables.min.css">
+<link rel="stylesheet" type="text/css" href="/sites/all/libraries/js/datatables-1.10.12/Responsive/css/responsive.dataTables.min.css">
+<script type="text/javascript" charset="utf8" src="/sites/all/libraries/js/datatables/media/js/jquery.dataTables.min.js"></script>
+<script type="text/javascript" charset="utf8" src="/sites/all/libraries/js/datatables/extras/Responsive/js/dataTables.responsive.min.js"></script>
+<script src="/sites/all/libraries/rwdimagemaps/jquery.rwdImageMaps.min.js"></script>
+<script>
+"use strict";
+var $ = jQuery;
+var key = "oV6yfSdpVE6saoLGnmGV9VGleFSHbssqpYNJZxAN";
+var mp;
+var facilitiesTable = $("#facilitiesTable").DataTable({
+    stateSave: true,
+    cache: true,
+    lengthMenu: [[100, 250, 500, -1], [100, 250, 500, "All"]],
+    scrollY: "60vh",
+    scrollCollapse: true,
+    columnDefs: [
+        {
+            targets: [3,4,5,6,7],
+            visible: false,
+            searchable: true
+        }
+    ],
+    language: {
+        "search": "",
+        "searchPlaceholder": "Search",
+        "emptyTable": "Loading list of facilities..."
+    }
+});
+var facilityMap;
+var selectedFacility;
+var facilities;
+var marker;
+var stateLayerGroup = L.layerGroup();
+// Hide stuff.
+$("#modal").hide();
+$("#overlay").hide();
+$("#facilityDetails").hide();
+$("body").addClass("wide-template");
+// Helper functions.
+function formatDate(date) {
+    if (date) {
+        var day = date.slice(8, 10);
+        var month = date.slice(5, 7);
+        var year = date.slice(0, 4);
+        return month + "/" + day + "/" + year;
+    } else {
+        return date;
+    }
+}
+function formatDateTime(date) {
+    if (date) {
+        var day = date.slice(8, 10);
+        var month = date.slice(5, 7);
+        var year = date.slice(0, 4);
+        var hour = date.slice(11, 13);
+        return month + "/" + day + "/" + year + ": " + hour;
+    } else {
+        return date;
+    }
+}
+function formatYYYYQ(str) {
+    if (str) {
+        return str.toString().slice(0, 4) + ", Q" + str.toString().slice(4, 5);
+    } else {
+        return "";
+    }
+}
+function formatORIS(num) {
+    var width = 6;
+    width -= num.toString().length;
+    return new Array(width + (/\./.test(num) ? 2 : 1)).join("0") + num;
+}
+function yesOrNo(str) {
+    if (str === false) {
+        return "No";
+    } else if (str === true) {
+        return "Yes";
+    } else {
+        return "";
+    }
+}
+function formatPhoneNumber(str) {
+    str = str.replace(/(\d\d\d)(\d\d\d)(\d\d\d\d)/, "($1) $2-$3");
+    return str;
+}
+function formatZip(str) {
+    str = str.replace(/(\d{5})(\d{4})/,"$1-$2");
+    return str;
+}
+function formatChemicalSymbols(str){
+    if(str === "NOX"){
+        return "NO<sub>x</sub>";
+    } else if (str === "SO2"){
+        return "SO<sub>2</sub>";
+    } else if (str === "PART"){
+        return "PM";
+    } else if (str === "HG"){
+        return "Hg";
+    } else {
+        return str;
+    }
+}
+function formatProgram(str) {
+    var prgStr = str.replace(/NOX/g,"NO<sub>x</sub>").replace(/NOx/g,"NO<sub>x</sub>").replace(/SO2/g,"SO<sub>2</sub>").replace(/O2/g,"O<sub>2</sub>").replace(/CO2/g,"CO<sub>2</sub>").replace(/NOXR/g,'NO<sub>x</sub>R').replace(/H2O/g,"H<sub>2</sub>O");
+    return prgStr;
+}
+function formatStatus(str) {
+    if(str === "OPR") {
+        return "Operating";
+    } else if (str === "RET" ) {
+        return "Retired";
+    } else {
+        return str;
+    }
+}
+function makeDateForYYYYQ(yearQuarter) {
+    if (yearQuarter) {
+        var date = "";
+        var q = yearQuarter.toString().slice(4);
+        if (q === "1") {
+            date = yearQuarter.toString().slice(0, 4) + "-01-01";
+        } else if (q === "2") {
+            date = yearQuarter.toString().slice(0, 4) + "-04-01";
+        } else if (q === "3") {
+            date = yearQuarter.toString().slice(0, 4) + "-07-01";
+        } else if (q === "4") {
+            date = yearQuarter.toString().slice(0, 4) + "-10-01";
+        }
+        return date;
+    } else {
+        return "";
+    }
+}
+function getTableParams(type, endDateCol, codeCols, descCols){
+    if (type === "default") {
+        var defaultTableParams = {
+            paging: false,
+            searching: false,
+            info: false,
+            ordering: true
+        };
+        return defaultTableParams;
+    } else if (type === "noEndDate") {
+        var noEndDateTableParams = {
+            paging: false,
+            searching: false,
+            info: false,
+            ordering: false,
+            columnDefs: [
+                {className: "code", "targets": codeCols},
+                {className: "description", "targets": descCols}
+            ]
+        };
+        return noEndDateTableParams;
+    } else {
+        var specialTableParams = {
+            paging: false,
+            searching: false,
+            info: false,
+            ordering: false,
+            columnDefs: [
+                {className: "rowStatus", "targets": [endDateCol]}, 
+                {className: "code", "targets": codeCols},
+                {className: "description", "targets": descCols}
+            ]
+        };
+        return specialTableParams;
+    }
+}
+// Display functions for the monitoring plan-level information.
+function getConfigType(unitStackStr) {
+    if (unitStackStr.match("CS")) {
+        return "common";
+    } else if (unitStackStr.match("MS")) {
+        return "multiple";
+    } else {
+        return "simple";
+    }
+}
+function displayUnitAndStackRow(table, monLoc, cols, twoUnitStack) {
+    var i;
+    var list;
+    if (monLoc.isUnit && twoUnitStack === true) {
+        list = ["<span class='stackRow'>Unit ID: " + monLoc.name + "</span>"];
+        list.push("<span class='stackRow'>Unit ID: " + monLoc.name + "</span>");
+        for (i = 0; i < cols; i += 1) {
+            list.push("");
+        }
+        table.row.add(list);
+    } else if (monLoc.isUnit && twoUnitStack === false) {
+        list = [];
+        list.push("<span class='stackRow'>Unit ID: " + monLoc.name + "</span>");
+        for (i = 0; i < cols; i += 1) {
+            list.push("");
+        }
+        table.row.add(list);
+    } else if (monLoc.isUnit === false && twoUnitStack === true) {
+        list = ["<span class='stackRow'>Stack/pipe ID: " + monLoc.name + "</span>"];
+        list.push("<span class='stackRow'>Stack/pipe ID: " + monLoc.name + "</span>");
+        for (i = 0; i < cols; i += 1) {
+            list.push("");
+        }
+        table.row.add(list);
+    } else {
+        list = [];
+        list.push("<span class='stackRow'>Stack/pipe ID: " + monLoc.name + "</span>");
+        for (i = 0; i < cols; i += 1) {
+            list.push("");
+        }
+        table.row.add(list);
+    }
+}
+function displayStackRow(table, monLoc, cols) {
+    if (monLoc.isUnit === false) {
+        var list = [];
+        var i;
+        list.push("<span class='stackRow'>Stack/pipe ID: " + monLoc.name + "</span>");
+        for (i = 0; i < cols; i += 1) {
+            list.push("");
+        }
+        table.row.add(list);
+    }
+}
+    // Data from monitoring plans API Call.
+var reportingFrequencyTable = $("#reportingFrequencyTable").DataTable(getTableParams("noEndDate",-1,[1],[2]));
+var monitoringLocationAttributesTable = $("#monitoringLocationAttributesTable").DataTable(getTableParams("",10,[5,7],[6,8]));
+var stackPipesUnitRelationshipsTable = $("#stackPipesUnitRelationshipsTable").DataTable(getTableParams("",5,[],[]));
+var unitOperationsTable = $("#unitOperationsTable").DataTable(getTableParams("",8,[2],[3]));
+var unitProgramsTable = $("#unitProgramsTable").DataTable(getTableParams("",5,[0,2],[1,3]));
+var unitFuelsTable = $("#unitFuelsTable").DataTable(getTableParams("",10,[0,2,4,6],[1,3,5,7]));
+var unitControlsTable = $("#unitControlsTable").DataTable(getTableParams("",8,[0,2],[1,3]));
+var monitoringMethodsTable = $("#monitoringMethodsTable").DataTable(getTableParams("",9,[0,2,4,6],[1,3,5,7]));
+var matsMonitoringMethodsTable = $("#matsMonitoringMethodsTable").DataTable(getTableParams("",5,[0,2],[1,3]));
+var ms1;
+var ms2;
+var spanValuesTable = $("#spanValuesTable").DataTable(getTableParams("",17,[0,2,4,10],[1,3,5,11]));
+var systemFuelFlowTable = $("#systemFuelFlowTable").DataTable(getTableParams("",9,[1,4,6],[2,5,7]));
+var analyzerRangesTable = $("#analyzerRangesTable").DataTable(getTableParams("",7,[0,3],[1,4]));
+var emissionsFormulasTable = $("#emissionsFormulasTable").DataTable(getTableParams("",7,[0,3],[1,4]));
+var rectangularDuctTable = $("#rectangularDuctTable").DataTable(getTableParams("",11,[2],[3]));
+var loadOperatingInfoTable = $("#loadOperatingInfoTable").DataTable(getTableParams("",12,[1,5,7],[2,6,8]));
+var monitoringDefaultsTable = $("#monitoringDefaultsTable").DataTable(getTableParams("",14,[0,3,5,7,9,11],[1,4,6,8,10,12]));
+var qualificationsTable = $("#qualificationsTable").DataTable(getTableParams("",-1,[0,7,11,15],[1,8,12,16]));
+var commentsTable = $("#commentsTable").DataTable(getTableParams("default",-1,[],[]));
+
+function displayMonitoringPlanHeader(facilityName, unitStackName, orisCode, locStr) {
+    $("#monPlanHeader").html("<h3>Monitoring Plan for the selected facility: " + facilityName + "</h3><h3>ORIS Code: " + orisCode + "; Unit/stack name: "+ unitStackName + "</h3>");
+    $("#monPlanLocation .pane-content").html("<p>The " + facilityName + " facility is located in " + locStr + ".</p>")
+    $("#linkToCodes").html("<a class='menu-link' href='https://www.epa.gov/airmarkets/ecmps-monitoring-plan-xml-code-descriptions'>Code Descriptions</a>");
+    $("#linkToXML").html("<a class='menu-link' href='ftp://ftp.epa.gov/dmdnload/xml/mp/" + formatORIS(orisCode) + "_MP.zip'>Download Monitoring Plans for this facility (XML)</a>");
+    $("#linkToStyleSheet").html("<a class='menu-link' href='https://www.epa.gov/sites/production/files/2015-11/ecmps_monitoringplan_1.zip'>Download Style Sheet (XLST)<span class='fileinfo'>(1 pg, 5 K)</span></a>");
+}
+function displayReportingFrequencyInfo(plan) {
+    reportingFrequencyTable.clear();
+    var i;
+    for (i = 0; i < plan.reportingFrequencies.length; i += 1) {
+        reportingFrequencyTable.row.add([
+            plan.unitStackName,
+            plan.reportingFrequencies[i].reportFreqCode,
+            plan.reportingFrequencies[i].reportFreq,
+            formatYYYYQ(plan.reportingFrequencies[i].beginQtr),
+            formatYYYYQ(plan.reportingFrequencies[i].endQtr)
+        ]);
+    }
+    reportingFrequencyTable.draw();
+}
+function displayMonitoringLocationAttributes(plan) {
+    monitoringLocationAttributesTable.clear();
+    var i;
+    var j;
+    var units = [];
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        for (j = 0; j < plan.monitoringLocations[i].locationAttributes.length; j += 1) {
+            if (plan.monitoringLocations[i].isUnit === true && units.indexOf(plan.monitoringLocations[i].name) === -1) {
+                displayUnitAndStackRow(monitoringLocationAttributesTable, plan.monitoringLocations[i], 11, false);
+                units.push(plan.monitoringLocations[i].name);
+            } else if (plan.monitoringLocations[i].isUnit === false){
+                displayUnitAndStackRow(monitoringLocationAttributesTable, plan.monitoringLocations[i], 11, false);
+            }
+            monitoringLocationAttributesTable.row.add([
+                yesOrNo(plan.monitoringLocations[i].locationAttributes[j].ductInd),
+                formatLargeNumbers(plan.monitoringLocations[i].locationAttributes[j].groundElevation),
+                plan.monitoringLocations[i].locationAttributes[j].stackHeight,
+                plan.monitoringLocations[i].locationAttributes[j].crossAreaExit,
+                plan.monitoringLocations[i].locationAttributes[j].crossAreaFlow,
+                plan.monitoringLocations[i].locationAttributes[j].materialCode,
+                plan.monitoringLocations[i].locationAttributes[j].material,
+                plan.monitoringLocations[i].locationAttributes[j].shapeCode,
+                plan.monitoringLocations[i].locationAttributes[j].shape,
+                formatDate(plan.monitoringLocations[i].locationAttributes[j].beginDate),
+                formatDate(plan.monitoringLocations[i].locationAttributes[j].endDate)
+            ]);
+        }
+    }
+    monitoringLocationAttributesTable.draw();
+}
+function displayStackPipesUnitRelationships(plan) {
+    stackPipesUnitRelationshipsTable.clear();
+    var i;
+    var j;
+    if (getConfigType(plan.unitStackName) === "common") {
+        displayStackRow(stackPipesUnitRelationshipsTable, plan.monitoringLocations[plan.monitoringLocations.length - 1], 6,false);
+        for (i = 0; i < plan.unitStackConfigurations.length; i += 1) {
+            stackPipesUnitRelationshipsTable.row.add([
+                plan.unitStackConfigurations[i].unitId,
+                yesOrNo(plan.unitStackConfigurations[i].bypassInd),
+                formatDate(plan.unitStackConfigurations[i].activeDate),
+                formatDate(plan.unitStackConfigurations[i].retireDate),
+                formatDate(plan.unitStackConfigurations[i].beginDate),
+                formatDate(plan.unitStackConfigurations[i].endDate)
+            ]);
+        }
+    } else if (getConfigType(plan.unitStackName) === "multiple") {
+        for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+            if (getConfigType(plan.monitoringLocations[i].name) === "multiple") {
+                displayUnitAndStackRow(stackPipesUnitRelationshipsTable, plan.monitoringLocations[i], 6,false);
+                for (j = 0; j < plan.unitStackConfigurations.length; j += 1) {
+                    if (plan.unitStackConfigurations[j].unitStack === plan.monitoringLocations[i].name) {
+                        stackPipesUnitRelationshipsTable.row.add([
+                            plan.unitStackConfigurations[j].unitId,
+                            yesOrNo(plan.unitStackConfigurations[j].bypassInd),
+                            formatDate(plan.unitStackConfigurations[j].activeDate),
+                            formatDate(plan.unitStackConfigurations[j].retireDate),
+                            formatDate(plan.unitStackConfigurations[j].beginDate),
+                            formatDate(plan.unitStackConfigurations[j].endDate)
+                        ]);
+                    }
+                }
+            }
+        }
+    }
+    stackPipesUnitRelationshipsTable.draw();
+}
+function displayUnitOperations(plan) {
+    unitOperationsTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if (plan.monitoringLocations[i].isUnit) {
+            displayUnitAndStackRow(unitOperationsTable, plan.monitoringLocations[i], 9, false);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].unitOperations.length; j += 1) {
+            unitOperationsTable.row.add([
+                formatDate(plan.monitoringLocations[i].unitOperations[j].commOpDate),
+                formatDate(plan.monitoringLocations[i].unitOperations[j].comrOpDate),
+                plan.monitoringLocations[i].unitOperations[j].unitTypeCode,
+                plan.monitoringLocations[i].unitOperations[j].unitType,
+                formatDate(plan.monitoringLocations[i].unitOperations[j].btBeginDate),
+                formatDate(plan.monitoringLocations[i].unitOperations[j].btEndDate),
+                plan.monitoringLocations[i].unitOperations[j].maxHICap,
+                formatDate(plan.monitoringLocations[i].unitOperations[j].hiBeginDate),
+                formatDate(plan.monitoringLocations[i].unitOperations[j].hiEndDate)
+            ]);
+        }
+    }
+    unitOperationsTable.draw();
+}
+function displayUnitPrograms(plan) {
+    unitProgramsTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if (plan.monitoringLocations[i].isUnit) {
+            unitProgramsTable.row.add([
+                "<span class='stackRow'>Unit ID: " + plan.monitoringLocations[i].name + "</span>", "<span class='stackRow'>Unit ID: " + plan.monitoringLocations[i].name + "</span>", "", "","",""
+            ]);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].unitPrograms.length; j += 1) {
+            unitProgramsTable.row.add([
+                plan.monitoringLocations[i].unitPrograms[j].code,
+                formatProgram(plan.monitoringLocations[i].unitPrograms[j].name),
+                plan.monitoringLocations[i].unitPrograms[j].classCode,
+                plan.monitoringLocations[i].unitPrograms[j].class,
+                formatDate(plan.monitoringLocations[i].unitPrograms[j].certificationBeginDate),
+                formatDate(plan.monitoringLocations[i].unitPrograms[j].certificationDeadline)
+            ]);
+        }
+    }
+    unitProgramsTable.draw();
+}
+function displayUnitFuels(plan) {
+    unitFuelsTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if (plan.monitoringLocations[i].isUnit) {
+            unitFuelsTable.row.add([
+                "<span class='stackRow'>Unit ID: " + plan.monitoringLocations[i].name + "</span>", "<span class='stackRow'>Unit ID: " + plan.monitoringLocations[i].name + "</span>", "", "", "", "", "","","","",""
+            ]);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].unitFuels.length; j += 1) {
+            unitFuelsTable.row.add([
+                plan.monitoringLocations[i].unitFuels[j].fuelCode,
+                plan.monitoringLocations[i].unitFuels[j].fuelDesc,
+                plan.monitoringLocations[i].unitFuels[j].indCode,
+                plan.monitoringLocations[i].unitFuels[j].indicatorDescription,
+                plan.monitoringLocations[i].unitFuels[j].demGCV,
+                plan.monitoringLocations[i].unitFuels[j].demGCVDesc,
+                plan.monitoringLocations[i].unitFuels[j].demSO2,
+                plan.monitoringLocations[i].unitFuels[j].demSO2Desc,
+                yesOrNo(plan.monitoringLocations[i].unitFuels[j].ozoneSeasInd),
+                formatDate(plan.monitoringLocations[i].unitFuels[j].beginDate),
+                formatDate(plan.monitoringLocations[i].unitFuels[j].endDate)
+            ]);
+        }
+    }
+    unitFuelsTable.draw();
+}
+function displayUnitControls(plan) {
+    unitControlsTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if (plan.monitoringLocations[i].isUnit) {
+            unitControlsTable.row.add([
+                "<span class='stackRow'>Unit ID: " + plan.monitoringLocations[i].name + "</span>", "<span class='stackRow'>Unit ID: " + plan.monitoringLocations[i].name + "</span>", "", "", "", "", "","",""
+            ]);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].unitControls.length; j += 1) {
+            unitControlsTable.row.add([
+                plan.monitoringLocations[i].unitControls[j].parameterCode,
+                plan.monitoringLocations[i].unitControls[j].parameterDesc,
+                plan.monitoringLocations[i].unitControls[j].controlCode,
+                formatProgram(plan.monitoringLocations[i].unitControls[j].controlDesc),
+                yesOrNo(plan.monitoringLocations[i].unitControls[j].origInstallInd),
+                yesOrNo(plan.monitoringLocations[i].unitControls[j].seasControlInd),
+                formatDate(plan.monitoringLocations[i].unitControls[j].installDate),
+                formatDate(plan.monitoringLocations[i].unitControls[j].optimDate),
+                formatDate(plan.monitoringLocations[i].unitControls[j].retireDate)
+            ]);
+        }
+    }
+    unitControlsTable.draw();
+}
+
+function displayMonitoringMethods(plan) {
+    monitoringMethodsTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if(plan.monitoringLocations[i].monitoringMethods.length > 0){
+            displayUnitAndStackRow(monitoringMethodsTable, plan.monitoringLocations[i], 10, true);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].monitoringMethods.length; j += 1) {
+            monitoringMethodsTable.row.add([
+                plan.monitoringLocations[i].monitoringMethods[j].parameterCode,
+                formatProgram(plan.monitoringLocations[i].monitoringMethods[j].parameterCodeDesc),
+                plan.monitoringLocations[i].monitoringMethods[j].methodCode,
+                formatProgram(plan.monitoringLocations[i].monitoringMethods[j].methodCodeDesc),
+                plan.monitoringLocations[i].monitoringMethods[j].subDataCode,
+                plan.monitoringLocations[i].monitoringMethods[j].subDataCodeDesc,
+                plan.monitoringLocations[i].monitoringMethods[j].bypassApproachCode,
+                plan.monitoringLocations[i].monitoringMethods[j].bypassApproachCodeDesc,
+                formatDateTime(plan.monitoringLocations[i].monitoringMethods[j].beginDateHour),
+                formatDateTime(plan.monitoringLocations[i].monitoringMethods[j].endDateHour)
+            ]);
+        }
+    }
+    monitoringMethodsTable.draw();
+}
+function displayMatsMonitoringMethods(plan) {
+    matsMonitoringMethodsTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if(plan.monitoringLocations[i].mercuryToxicsStandardsMethods.length > 0) {
+            displayUnitAndStackRow(matsMonitoringMethodsTable, plan.monitoringLocations[i], 6, true);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].mercuryToxicsStandardsMethods.length; j += 1) {
+            matsMonitoringMethodsTable.row.add([
+                plan.monitoringLocations[i].mercuryToxicsStandardsMethods[j].matsMethodParameterCode,
+                plan.monitoringLocations[i].mercuryToxicsStandardsMethods[j].matsMethodParameter,
+                plan.monitoringLocations[i].mercuryToxicsStandardsMethods[j].matsMethodCode,
+                plan.monitoringLocations[i].mercuryToxicsStandardsMethods[j].matsMethodDesc,
+                formatDateTime(plan.monitoringLocations[i].mercuryToxicsStandardsMethods[j].beginDateHour),
+                formatDateTime(plan.monitoringLocations[i].mercuryToxicsStandardsMethods[j].endDateHour)
+            ]);
+        }
+    }
+    matsMonitoringMethodsTable.draw();
+}
+function generateMonitoringSystemTables(plan) {
+    var tableHTML = [];
+    var configType;
+    var i;
+    if (plan.unitStackName.match("CS")) {
+        configType = "common";
+        for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+            if (plan.monitoringLocations[i].isUnit === false) {
+                tableHTML.push(
+                    "<table id='ms1" + i + "'" + " class='ms1 stripe hover noborder' cellspacing='0' width='100%'>" +
+                        "<caption class='ms1" + i + "'" + "><span>Stack/pipe ID: " + plan.monitoringLocations[i].name + "</span></caption>" +
+                        "<thead>" +
+                            "<tr><th>System ID</th>" +
+                            "<th>System type code</th>" +
+                            "<th>System type</th>" +
+                            "<th>System designation code</th>" +
+                            "<th>System designation</th>" +
+                            "<th>Begin time</th>" +
+                            "<th>End time</th></tr>" +
+                        "</thead>" +
+                        "<tbody>" +
+                        "</tbody>" +
+                    "</table><hr>"
+                );
+                tableHTML.push(
+                    "<table id='ms2" + i + "'" + " class='ms2 stripe hover noborder' cellspacing='0' width='100%'>" +
+                        "<thead>" +
+                            "<th>System ID</th>" +
+                            "<th>Component ID</th>" +
+                            "<th>Component type code</th>" +
+                            "<th>Component type</th>" +
+                            "<th>Hg converter indicator</th>" +
+                            "<th>Sample acquistion method code</th>" +
+                            "<th>Sample acquistion method</th>" +
+                            "<th>Basis code</th>" +
+                            "<th>Basis code description</th>" +
+                            "<th>Manufacturer</th>" +
+                            "<th>Model or version</th>" +
+                            "<th>Serial no.</th>" +
+                            "<th>Begin time</th>" +
+                            "<th>End time</th>" +
+                        "</thead>" +
+                        "<tbody>" +
+                        "</tbody>" +
+                    "</table>"
+                );
+            }
+        }
+    } else if (plan.unitStackName.match("MS")) {
+        configType = "multiple";
+        for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+            if (plan.monitoringLocations[i].isUnit === false) {
+                tableHTML.push(
+                    "<table id='ms1" + i + "'" + " class='ms1 stripe hover noborder' cellspacing='0' width='100%'>" +
+                        "<caption class='ms1" + i + "'" + ">Stack/pipe ID: " + plan.monitoringLocations[i].name + "</caption>" +
+                        "<thead>" +
+                            "<tr><th>System ID</th>" +
+                            "<th>System type code</th>" +
+                            "<th>System type</th>" +
+                            "<th>System designation code</th>" +
+                            "<th>System designation</th>" +
+                            "<th>Begin time</th>" +
+                            "<th>End time</th></tr>" +
+                        "</thead>" +
+                        "<tbody>" +
+                        "</tbody>" +
+                    "</table><hr>"
+                );
+            } else {
+                tableHTML.push(
+                    "<table id='ms1" + i + "'" + " class='ms1 stripe hover noborder' cellspacing='0' width='100%'>" +
+                        "<caption class='ms1" + i + "'" + ">Unit ID: " + plan.monitoringLocations[i].name + "</caption>" +
+                        "<thead>" +
+                            "<tr><th>System ID</th>" +
+                            "<th>System type code</th>" +
+                            "<th>System type</th>" +
+                            "<th>System designation code</th>" +
+                            "<th>System designation</th>" +
+                            "<th>Begin time</th>" +
+                            "<th>End time</th></tr>" +
+                        "</thead>" +
+                        "<tbody>" +
+                        "</tbody>" +
+                    "</table><hr>"
+                );
+            }
+            tableHTML.push(
+                "<table id='ms2" + i + "'" + " class='ms2 stripe hover noborder' cellspacing='0' width='100%'>" +
+                    "<thead>" +
+                        "<th>System ID</th>" +
+                        "<th>Component ID</th>" +
+                        "<th>Component type code</th>" +
+                        "<th>Component type</th>" +
+                        "<th>Hg converter indicator</th>" +
+                        "<th>Sample acquistion method code</th>" +
+                        "<th>Sample acquistion method</th>" +
+                        "<th>Basis code</th>" +
+                        "<th>Basis code description</th>" +
+                        "<th>Manufacturer</th>" +
+                        "<th>Model or version</th>" +
+                        "<th>Serial no.</th>" +
+                        "<th>Begin time</th>" +
+                        "<th>End time</th>" +
+                    "</thead>" +
+                    "<tbody>" +
+                    "</tbody>" +
+                "</table>"
+            );
+        }
+    } else {
+        configType = "simple";
+        for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+            tableHTML.push(
+                "<table id='ms1" + i + "'" + " class='ms1 stripe hover noborder' cellspacing='0' width='100%'>" +
+                    "<caption class='ms1" + i + "'" + ">Unit ID: " + plan.monitoringLocations[i].name + "</caption>" +
+                    "<thead>" +
+                        "<tr><th>System ID</th>" +
+                        "<th>System type code</th>" +
+                        "<th>System type</th>" +
+                        "<th>System designation code</th>" +
+                        "<th>System designation</th>" +
+                        "<th>Begin time</th>" +
+                        "<th>End time</th></tr>" +
+                    "</thead>" +
+                    "<tbody>" +
+                    "</tbody>" +
+                "</table><hr>"
+            );
+            tableHTML.push(
+                "<table id='ms2" + i + "'" + " class='ms2 stripe hover noborder' cellspacing='0' width='100%'>" +
+                    "<thead>" +
+                        "<th>System ID</th>" +
+                        "<th>Component ID</th>" +
+                        "<th>Component type code</th>" +
+                        "<th>Component type</th>" +
+                        "<th>Hg converter indicator</th>" +
+                        "<th>Sample acquistion method code</th>" +
+                        "<th>Sample acquistion method</th>" +
+                        "<th>Basis code</th>" +
+                        "<th>Basis code description</th>" +
+                        "<th>Manufacturer</th>" +
+                        "<th>Model or version</th>" +
+                        "<th>Serial no.</th>" +
+                        "<th>Begin time</th>" +
+                        "<th>End time</th>" +
+                    "</thead>" +
+                    "<tbody>" +
+                    "</tbody>" +
+                "</table>"
+            );
+        }
+    }
+    $("#monSystemDiv").html(tableHTML.join(""));
+    ms1 = $(".ms1").DataTable(getTableParams("",6,[1,3],[2,4]);
+    ms2 = $(".ms2").DataTable(getTableParams("",13,[2,5,7],[3,6,8]));
+}
+function displayMonitoringSystem(plan) {
+    ms1.clear();
+    ms2.clear();
+    var i;
+    var j;
+    
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        var counter1 = 0;
+        var sysIdArr = [];
+        var comIdArr = [];
+        for (j = 0; j < plan.monitoringLocations[i].monitoringSystems.length; j += 1) {
+            if (plan.monitoringLocations[i].name === plan.monitoringLocations[i].monitoringSystems[j].locName) {
+                if (sysIdArr.indexOf(plan.monitoringLocations[i].monitoringSystems[j].sysId) < 0) {
+                    sysIdArr.push(plan.monitoringLocations[i].monitoringSystems[j].sysId);
+                }
+                if (counter1 < sysIdArr.length) {
+                    ms1.table("#ms1" + i).row.add([
+                        plan.monitoringLocations[i].monitoringSystems[j].sysId,
+                        plan.monitoringLocations[i].monitoringSystems[j].sysTypeCode,
+                        formatProgram(plan.monitoringLocations[i].monitoringSystems[j].systemTypeDescription),
+                        plan.monitoringLocations[i].monitoringSystesm[j].sysDesignationCode,
+                        plan.monitoringLocations[i].monitoringSystems[j].systemDesignationCodeDesc,
+                        formatDateTime(plan.monitoringLocations[i].monitoringSystems[j].sysBeginDateHour),
+                        formatDateTime(plan.monitoringLocations[i].monitoringSystems[j].sysEndDateHour)
+                    ]);
+                    counter1 += 1;
+                }
+                if (comIdArr.indexOf(plan.monitoringLocations[i].monitoringSystems[j].componentId) < 0) {
+                    comIdArr.push(plan.monitoringLocations[i].monitoringSystems[j].componentId);
+                }
+
+                ms2.table("#ms2" + i).row.add([
+                    plan.monitoringLocations[i].monitoringSystems[j].sysId,
+                    plan.monitoringLocations[i].monitoringSystems[j].componentId,
+                    plan.monitoringLocations[i].monitoringSystems[j].componentTypeCode,
+                    formatProgram(plan.monitoringLocations[i].monitoringSystems[j].componentTypeCodeDescription),
+                    yesOrNo(plan.monitoringLocations[i].monitoringSystems[j].hgConverterInd),
+                    plan.monitoringLocations[i].monitoringSystems[j].acqCode,
+                    plan.monitoringLocations[i].monitoringSystems[j].acqCodeDescription,
+                    plan.monitoringLocations[i].monitoringSystems[j].basisCode,
+                    plan.monitoringLocations[i].monitoringSystems[j].basisCodeDesc,
+                    plan.monitoringLocations[i].monitoringSystems[j].manufacturer,
+                    plan.monitoringLocations[i].monitoringSystems[j].modelVersion,
+                    plan.monitoringLocations[i].monitoringSystems[j].serialNum,
+                    formatDateTime(plan.monitoringLocations[i].monitoringSystems[j].componentBeginDateHour),
+                    formatDateTime(plan.monitoringLocations[i].monitoringSystems[j].componentEndDateHour)
+                ]);
+            
+            }
+        }
+    }
+    ms1.draw();
+    ms2.draw();
+}
+function displaySpanRangeValues(plan) {
+    spanValuesTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if (plan.monitoringLocations[i].spanDetails.length > 0){
+            displayUnitAndStackRow(spanValuesTable, plan.monitoringLocations[i], 18, true);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].spanDetails.length; j += 1) {
+            spanValuesTable.row.add([
+                plan.monitoringLocations[i].spanDetails[j].componentTypeCode,
+                formatProgram(plan.monitoringLocations[i].spanDetails[j].componentTypeCodeDesc),
+                plan.monitoringLocations[i].spanDetails[j].spanScaleCode,
+                plan.monitoringLocations[i].spanDetails[j].spanScaleCodeDesc,
+                plan.monitoringLocations[i].spanDetails[j].spanMethodCode,
+                plan.monitoringLocations[i].spanDetails[j].spanMethodCodeDesc,
+                formatLargeNumbers(plan.monitoringLocations[i].spanDetails[j].mpcValue) || formatLargeNumbers(plan.monitoringLocations[i].spanDetails[j].mpfValue),
+                plan.monitoringLocations[i].spanDetails[j].mecValue,
+                formatLargeNumbers(plan.monitoringLocations[i].spanDetails[j].spanValue),
+                formatLargeNumbers(plan.monitoringLocations[i].spanDetails[j].fullScaleRange),
+                plan.monitoringLocations[i].spanDetails[j].spanUOMCode,
+                plan.monitoringLocations[i].spanDetails[j].uomCodeDesc,
+                formatLargeNumbers(plan.monitoringLocations[i].spanDetails[j].flowSpanValue),
+                plan.monitoringLocations[i].spanDetails[j].maxLowRange,
+                plan.monitoringLocations[i].spanDetails[j].defaultHighRange,
+                formatLargeNumbers(plan.monitoringLocations[i].spanDetails[j].flowFullScaleRange),
+                formatDateTime(plan.monitoringLocations[i].spanDetails[j].beginDateHour),
+                formatDateTime(plan.monitoringLocations[i].spanDetails[j].endDateHour)
+            ]);
+        }
+    }
+    spanValuesTable.draw();
+}
+function displaySystemFuelFlow(plan) {
+    systemFuelFlowTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if (plan.monitoringLocations[i].systemFlows.length > 0) {
+            displayUnitAndStackRow(systemFuelFlowTable, plan.monitoringLocations[i], 10, false);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].systemFlows.length; j += 1) {
+            systemFuelFlowTable.row.add([
+                plan.monitoringLocations[i].systemFlows[j].sysId,
+                plan.monitoringLocations[i].systemFlows[j].fuelCode,
+                plan.monitoringLocations[i].systemFlows[j].fuelCodeDesc,
+                formatLargeNumbers(plan.monitoringLocations[i].systemFlows[j].maxRate),
+                plan.monitoringLocations[i].systemFlows[j].sysFuelUOMCode,
+                plan.monitoringLocations[i].systemFlows[j].sysFuelUOMCodeDesc,
+                plan.monitoringLocations[i].systemFlows[j].maxRateSourceCode,
+                plan.monitoringLocations[i].systemFlows[j].maxRateSourceCodeDesc,
+                formatDate(plan.monitoringLocations[i].systemFlows[j].beginDate),
+                formatDate(plan.monitoringLocations[i].systemFlows[j].endDate)
+            ]);
+        }
+    }
+    systemFuelFlowTable.draw();
+}
+function displayAnalyzerRanges(plan) {
+    analyzerRangesTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if (plan.monitoringLocations[i].analyzerRanges.length > 0){
+            displayUnitAndStackRow(analyzerRangesTable, plan.monitoringLocations[i], 8, true);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].analyzerRanges.length; j += 1) {
+            analyzerRangesTable.row.add([
+                plan.monitoringLocations[i].analyzerRanges[j].componentType,
+                formatProgram(plan.monitoringLocations[i].analyzerRanges[j].componentTypeCodeDesc),
+                plan.monitoringLocations[i].analyzerRanges[j].componentId,
+                plan.monitoringLocations[i].analyzerRanges[j].analyzerRangeCode,
+                plan.monitoringLocations[i].analyzerRanges[j].analyzerRangeCodeDesc,
+                yesOrNo(plan.monitoringLocations[i].analyzerRanges[j].dualRangeInd),
+                formatDateTime(plan.monitoringLocations[i].analyzerRanges[j].beginDateHour),
+                formatDateTime(plan.monitoringLocations[i].analyzerRanges[j].endDateHour)
+            ]);
+        }
+    }
+    analyzerRangesTable.draw();
+}
+function displayEmisssionsFormulas(plan) {
+    emissionsFormulasTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        displayUnitAndStackRow(emissionsFormulasTable, plan.monitoringLocations[i], 8, true);
+        for (j = 0; j < plan.monitoringLocations[i].emissionsFormulas.length; j += 1) {
+            emissionsFormulasTable.row.add([
+                plan.monitoringLocations[i].emissionsFormulas[j].parameterCode,
+                formatProgram(plan.monitoringLocations[i].emissionsFormulas[j].parameterCodeDesc),
+                plan.monitoringLocations[i].emissionsFormulas[j].formulaId,
+                plan.monitoringLocations[i].emissionsFormulas[j].equationCode,
+                formatProgram(plan.monitoringLocations[i].emissionsFormulas[j].equationCodeDesc),
+                plan.monitoringLocations[i].emissionsFormulas[j].formulaEquation,
+                formatDateTime(plan.monitoringLocations[i].emissionsFormulas[j].beginDateHour),
+                formatDateTime(plan.monitoringLocations[i].emissionsFormulas[j].endDateHour)
+            ]);
+        }
+    }
+    emissionsFormulasTable.draw();
+}
+function displayRectangularDuct(plan) {
+    rectangularDuctTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if(plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors.length > 0) {
+            displayUnitAndStackRow(rectangularDuctTable, plan.monitoringLocations[i], 12, false);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors.length; j += 1) {
+            rectangularDuctTable.row.add([
+                formatDate(plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].wafDeterminedDate),
+                formatDateTime(plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].wafEffectiveDatetime),
+                plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].wafMethodCode,
+                plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].wafMethodCodeDesc,
+                plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].wafValues,
+                plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].numTestRuns,
+                plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].numTraversePointsWAF,
+                plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].numTestPoints,
+                plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].numTraversePointsRef,
+                plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].ductWidth,
+                plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].ductDepth,
+                formatDateTime(plan.monitoringLocations[i].rectangularDuctWallEffectsAdjustmentFactors[j].endDateHour)
+            ]);
+        }
+    }
+    rectangularDuctTable.draw();
+}
+function displayLoadOperatingInfo(plan) {
+    loadOperatingInfoTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if (plan.monitoringLocations[i].loadLevels.length > 0) {
+            displayUnitAndStackRow(loadOperatingInfoTable, plan.monitoringLocations[i], 13, false);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].loadLevels.length; j += 1) {
+            loadOperatingInfoTable.row.add([
+                plan.monitoringLocations[i].loadLevels[j].maxLoadValue,
+                plan.monitoringLocations[i].loadLevels[j].maxLoadUOMCode,
+                plan.monitoringLocations[i].loadLevels[j].maxLoadUOMCodeDesc,
+                plan.monitoringLocations[i].loadLevels[j].upperOpBound,
+                plan.monitoringLocations[i].loadLevels[j].lowerOpBound,
+                plan.monitoringLocations[i].loadLevels[j].normLvl,
+                plan.monitoringLocations[i].loadLevels[j].normalOpLvlCdDesc,
+                plan.monitoringLocations[i].loadLevels[j].secLvl,
+                plan.monitoringLocations[i].loadLevels[j].secondOpLvlCdDesc,
+                yesOrNo(plan.monitoringLocations[i].loadLevels[j].secNormInd),
+                formatDate(plan.monitoringLocations[i].loadLevels[j].loadAnalysisDate),
+                formatDateTime(plan.monitoringLocations[i].loadLevels[j].beginDateHour),
+                formatDateTime(plan.monitoringLocations[i].loadLevels[j].endDateHour)
+            ]);
+        }
+    }
+    loadOperatingInfoTable.draw();
+}
+function displayMonitoringDefaults(plan) {
+    monitoringDefaultsTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        if (plan.monitoringLocations[i].monitoringDefaults.length > 0) {
+            displayUnitAndStackRow(monitoringDefaultsTable, plan.monitoringLocations[i], 14, true);
+        }
+        for (j = 0; j < plan.monitoringLocations[i].monitoringDefaults.length; j += 1) {
+            monitoringDefaultsTable.row.add([
+                plan.monitoringLocations[i].monitoringDefaults[j].parameterCode,
+                formatProgram(plan.monitoringLocations[i].monitoringDefaults[j].parameterCodeDesc),
+                plan.monitoringLocations[i].monitoringDefaults[j].defaultValue,
+                plan.monitoringLocations[i].monitoringDefaults[j].defaultUOMCode,
+                plan.monitoringLocations[i].monitoringDefaults[j].uomCodeDesc,
+                plan.monitoringLocations[i].monitoringDefaults[j].defaultPurposeCode,
+                plan.monitoringLocations[i].monitoringDefaults[j].defaultPurposeCodeDesc,
+                plan.monitoringLocations[i].monitoringDefaults[j].fuelCode,
+                plan.monitoringLocations[i].monitoringDefaults[j].fuelCodeDesc,
+                plan.monitoringLocations[i].monitoringDefaults[j].opCondCode,
+                plan.monitoringLocations[i].monitoringDefaults[j].operatingConditionCodeDesc,
+                plan.monitoringLocations[i].monitoringDefaults[j].defaultSourceCode,
+                plan.monitoringLocations[i].monitoringDefaults[j].defaultSourceCodeDesc,
+                formatDateTime(plan.monitoringLocations[i].monitoringDefaults[j].beginDateHour),
+                formatDateTime(plan.monitoringLocations[i].monitoringDefaults[j].endDateHour)
+            ]);
+        }
+    }
+    monitoringDefaultsTable.draw();
+}
+function displayQualifications(plan) {
+    qualificationsTable.clear();
+    var i;
+    var j;
+    for (i = 0; i < plan.monitoringLocations.length; i += 1) {
+        for (j = 0; j < plan.monitoringLocations[i].monitoringQualifications.length; j += 1) {
+            qualificationsTable.row.add([
+                plan.monitoringLocations[i].monitoringQualifications[j].qualTypeCode,
+                plan.monitoringLocations[i].monitoringQualifications[j].qualTypeCodeDesc,
+                formatDate(plan.monitoringLocations[i].monitoringQualifications[j].beginDate),
+                formatDate(plan.monitoringLocations[i].monitoringQualifications[j].endDate),
+                plan.monitoringLocations[i].monitoringQualifications[j].qualYear,
+                plan.monitoringLocations[i].monitoringQualifications[j].avgPctValue,
+                plan.monitoringLocations[i].monitoringQualifications[j].year1QualDataYear,
+                plan.monitoringLocations[i].monitoringQualifications[j].year1QualDataTypeCode,
+                plan.monitoringLocations[i].monitoringQualifications[j].year1QualDataTypeCodeDesc,
+                plan.monitoringLocations[i].monitoringQualifications[j].year1PctValue,
+                plan.monitoringLocations[i].monitoringQualifications[j].year2QualDataYear,
+                plan.monitoringLocations[i].monitoringQualifications[j].year2QualDataTypeCode,
+                plan.monitoringLocations[i].monitoringQualifications[j].year2QualDataTypeCodeDesc,
+                plan.monitoringLocations[i].monitoringQualifications[j].year2PctValue,
+                plan.monitoringLocations[i].monitoringQualifications[j].year3QualDataYear,
+                plan.monitoringLocations[i].monitoringQualifications[j].year3QualDataTypeCode,
+                plan.monitoringLocations[i].monitoringQualifications[j].year3QualDataTypeCodeDesc,
+                plan.monitoringLocations[i].monitoringQualifications[j].year3PctValue
+            ]);
+        }
+    }
+    qualificationsTable.draw();
+}
+function displayComments(plan) {
+    commentsTable.clear();
+    var i;
+    for (i = 0; i < plan.comments.length; i += 1) {
+        commentsTable.row.add([
+            plan.comments[i].unitStackPipe,
+            plan.comments[i].monPlanComment,
+            formatDate(plan.comments[i].beginDate),
+            formatDate(plan.comments[i].endDate)
+        ]);
+    }
+    commentsTable.draw();
+}
+// Get the monitoring plan.
+function getMonitoringPlan(plan, facilityName, orisCode) {
+    // Get variables needed for API Call.
+    var unitStackName = plan[0];
+    var date;
+    if (plan[1] === "Active") {
+        var dt = new Date();
+        date = dt.getFullYear() + "-" + (dt.getMonth() + 1) + "-" + dt.getDate();
+    } else {
+        var yq = plan[2].substr(0, 4) + plan[2].substr(7, 1);
+        date = makeDateForYYYYQ(yq);
+    }
+    // Make API Call.
+    var monPlanURL = "https://api.data.gov/TEST/epa/FACT/1.0/monitoringPlan/" + orisCode + "/" + unitStackName + "/" + date + "?api_key=" + key;
+    $.ajax({
+        async: true,
+        url: monPlanURL,
+        type: "GET",
+        dataType: "json",
+        beforeSend: function () {
+            $("#loadingMessage").html("<h2>Loading monitoring plan...</h2>");
+            $("#loadingMessage").show();
+            $("#allContent").hide();
+            $("footer").hide();
+        },
+        success: function (res) {
+            $("#loadingMessage").hide();
+            $("footer").show();
+            // Get the data.
+            mp = res.data;
+            // Open the modal.
+            $("#modal").fadeIn("slow");
+            $("#radioDesc").attr("checked",true);
+            $("#inactivePartsToggle").attr("checked",true);
+            var locStr = selectedFacility.county.name + ", " + selectedFacility.state.name + ", " + "EPA " + selectedFacility.region.name;
+            displayMonitoringPlanHeader(facilityName, unitStackName, orisCode, locStr);
+            displayReportingFrequencyInfo(mp);
+            displayMonitoringLocationAttributes(mp);
+            displayStackPipesUnitRelationships(mp);
+            displayUnitOperations(mp);
+            displayUnitPrograms(mp);
+            displayUnitFuels(mp);
+            displayUnitControls(mp);
+            displayMonitoringMethods(mp);
+            displayMatsMonitoringMethods(mp);
+            generateMonitoringSystemTables(mp);
+            displayMonitoringSystem(mp);
+            displaySpanRangeValues(mp);
+            displaySystemFuelFlow(mp);
+            displayAnalyzerRanges(mp);
+            displayEmisssionsFormulas(mp);
+            displayRectangularDuct(mp);
+            displayLoadOperatingInfo(mp);
+            displayMonitoringDefaults(mp);
+            displayQualifications(mp);
+            displayComments(mp);
+            $("#spanValuesTable").css("font-size", "small");
+            $(".stackRow").closest("tr").css("background-color", "lightblue");
+            $(".stackRow").closest("tr").css("font-weight", "bolder");
+            $(".modalNav li").css("display", "inline");
+            $("table").addClass("hover");
+            $(".description").show();
+            $(".code").hide();
+        },
+        error: function (msg) {
+            // Display error message.
+            $("#loadingMessage").html("<h2>Error loading monitoring plan. Please try again later.<h2>");
+        }
+    });
+}
+
+
+
+function displayMap(facility) {
+    if (facility.geographicLocation.isValid === true) {
+        $("#optionsDiv").show();
+        var satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {attribution: "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"});
+        var streets = L.tileLayer("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "&copy; <a href='https://osm.org/copyright'>OpenStreetMap</a> contributors"});
+        facilityMap = L.map("facilityMap", {
+            center: [facility.geographicLocation.latitude, facility.geographicLocation.longitude],
+            zoom: 15,
+            layers: [satellite, streets]
+        });
+        var baseMaps = {
+            "Streets": streets,
+            "Satellite": satellite
+        };
+
+        var layers = L.control.layers(baseMaps);
+
+        layers.addTo(facilityMap);
+
+        var legend = L.control({position: "bottomright"});
+
+        legend.onAdd = function(map) {
+            var div = L.DomUtil.create("div","legend");
+            div.innerHTML = "<img title='EPA Region " + facility.region.id + "'" +  " alt='Region '" + facility.region.id + "' image ' width='60%' src='https://www.epa.gov/sites/production/files/2013-06/region" + facility.region.id + ".png'>";
+            return div;
+        };
+
+        legend.addTo(facilityMap);
+
+        facilityMap.on("popupopen", function (){
+            $(".showPopUpPlans").click(function (event) {
+                $(".popUpPlans").show();
+                $(this).hide();
+                facilityMap.panBy([0,-($(".leaflet-popup-content-wrapper").height()/2)]);
+            });
+            $(".popUpPlans li a").click(function (){
+                var mpArr = [$(this).parent("li").attr("data-unitStackName"),$(this).parent("li").attr("data-status"),$(this).parent("li").attr("data-beginYearQuarter")];
+                var name = $("#popUpFacilityName").html();
+                var oris = $("#popUpOris").html();
+                getMonitoringPlan(mpArr, name, oris);
+            });
+        });
+    } else {
+        $("#optionsDiv").hide();
+    }
+    $("#facilityMap img").attr("alt", "Facility Map");
+    $(".legend img").css("float","right");
+}
+function getRelatedFacilities(facility) {
+    var i;
+    var j;
+    for (i = 0; i < facilities.length; i += 1) {
+        if (facility.state.name === facilities[i].state.name && facilities[i].geographicLocation.isValid === true) {
+
+            var mpList = [];
+            for (j = 0; j < facilities[i].monitoringPlans.length; j += 1) {
+                var unitStackName = createUnitStackName(facilities[i].monitoringPlans[j].monitoringLocations);
+                var status = facilities[i].monitoringPlans[j].status;
+                var beginYearQuarter = formatYYYYQ(facilities[i].monitoringPlans[j].beginYearQuarter);
+                if(status == "Active") {
+                    mpList.push("<li data-unitStackName='" + unitStackName + "' data-status='" + status + "' data-beginYearQuarter='" + beginYearQuarter + "'><a href='#'>" + unitStackName + "</a></li>");
+                }
+            }
+            stateLayerGroup.addLayer(L.marker([facilities[i].geographicLocation.latitude, facilities[i].geographicLocation.longitude]).bindPopup("<strong><span id='popUpFacilityName'>" + facilities[i].name + "</span></strong><br>" + "<strong>ORIS Code</strong>: " + "<span id='popUpOris'>" + facilities[i].orisCode + "</span><br>" + "<strong>Latitude</strong>: " + facilities[i].geographicLocation.latitude + "<br>" + "<strong>Longitude</strong>: " + facilities[i].geographicLocation.longitude + "<br>" + "<strong>Active Monitoring Plans: </strong><br><button class='showPopUpPlans'>Show</button><ul style='display:none; 'class='popUpPlans'>" + mpList.join("") +"</ul>"));
+        }
+    }
+    stateLayerGroup.addTo(facilityMap);
+}
+function formatLargeNumbers(x){
+    if(x){
+        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    } else {
+        return "";
+    }
+}
+function createUnitStackName(data) {
+    var planNames = [];
+    var i;
+    for (i = 0; i < data.length; i += 1) {
+        planNames.push(data[i].name);
+    }
+    return planNames.sort().toString();
+}
+$(document).ready(function (e) {
+    // Initialize variables.
+    // Load the data.
+    var facilitiesURL = "https://api.data.gov/TEST/epa/FACT/1.0/facilities?api_key=" + key;
+    function checkIfNull(elem) {
+        if(elem !== null){
+            return elem.name;
+        } else {
+            return "";
+        }
+    }
+    function checkContacts(elem,first,last) {
+        if(elem !== []){
+            return elem.map(function(elem){
+                return elem[first] + " " + elem[last];
+            }).join(",");
+        } else {
+            return "";
+        }   
+    }
+    function flattenArrays(unitArr,otherArr,prop) {
+        if(unitArr !== []) {
+            var i;
+            var str = "";
+            for(i = 0; i < unitArr.length; i+=1){
+                if(unitArr[i][otherArr] !== undefined && unitArr[i][otherArr]!== []) {
+                    var merged = [].concat.apply([],unitArr[i][otherArr])
+                    var unitStr = merged.map(function(merged){
+                        return merged[prop]
+                    }).join(",");
+                    str += unitStr;
+                }   
+            }
+            return str;
+        } else {
+            return "";
+        }
+    }
+    function addFacilities(data) {
+        var i;
+        for(i = 0; i < data.length; i+=1) {
+            facilitiesTable.row.add([
+               data[i].orisCode,
+               data[i].name,
+               data[i].state.name,
+               checkIfNull(data[i].county),
+               checkContacts(data[i].contacts,"firstName","lastName"),
+               flattenArrays(data[i].units,"fuels","fuelDesc"),
+               flattenArrays(data[i].units,"programs","description"),
+               flattenArrays(data[i].units,"controls","controlDesc")
+            ]);
+        }
+        facilitiesTable.draw();
+    }
+
+
+    $.ajax({
+        url: facilitiesURL,
+        type: "GET",
+        error: function(error) {
+            $("#facilitiesTable td.dataTables_empty").html("Error loading list of facilities. Please try again later.");
+        },
+        cache: true,
+        success: function(res) {
+            $("#loadingMessage").hide();
+            $("table").addClass("hover");
+            addFacilities(res.data);
+            facilities = res.data;
+            $("#facilitiesTable").css("cursor", "pointer");
+            // Data from facilities API Call.
+            var unitsTable = $("#unitsTable").DataTable({
+                paging: false,
+                searching: false,
+                info: false,
+                columnDefs: [{className: "operatingStatus", "targets": [2]}]
+            });
+            $("#unitsTable").css("cursor", "pointer");
+            var monitoringPlansTable = $("#monitoringPlansTable").DataTable({
+                paging: false,
+                searching: false,
+                info: false,
+                columnDefs: [
+                    {className: "status", "targets": [1]},
+                    {className: "center-align", "targets": [4]}
+                ]
+            });
+            $("#monitoringPlans").css({"height": "75vh","overflow-y": "auto","overflow-x":"false"});
+            $("#monitoringPlansTable").css("cursor", "pointer");
+
+            // Display functions for all facility-level information.
+            function displayBasicFacilityInfo(facility) {
+                var county;
+                var state;
+                var region;
+                $("#facilityName").html("<h3>Selected Facility: " + facility.name + "</h3><h4>ORIS Code: " + facility.orisCode + "</h4>");
+                $("#basicFacilityInfo").show();
+                $("#facilityMap").show();
+                if (facility.county) {
+                    county = facility.county.name;
+                } else {
+                    county = "N/A";
+                }
+                if (facility.state) {
+                    state = facility.state.name;
+                } else {
+                    state = "N/A";
+                }
+                if (facility.region) {
+                    region = facility.region.id;
+                } else {
+                    region = "N/A";
+                }
+                $("#basicFacilityInfo").html(
+                    "<div class='row cols-3'><div class='col'><h4>" + "County</h4><p>" + county + "</p></div>" +
+                    "<div class='col'><h4>" + "State</h4><p>" + state + "</p></div>" +
+                    "<div class='col'><h4>" + "EPA Region</h4><p>" + region + "</p></div>" +
+                    "</div>" +
+                    "<div id='facilityMap' style='height: 50vh'></div>"
+                );
+                displayMap(facility);
+                $("#showOneLabel").html("This facility");
+                $("#showStateLabel").html("All facilities in " + facility.state.name);
+                $("#showOverview").parent().css("text-align","center");
+            }
+            function displayContacts(facility) {
+                // Display the facility's contact(s).
+                var contactsHTML = [];
+                contactsHTML.push("<div class='box multi news' id='owners'></div>");
+                var i;
+                for (i = 0; i < facility.contacts.length; i += 1) {
+                    contactsHTML.push(
+                        "<div class='row cols-2'>" +
+                            "<hr>" +
+                            "<div class='col'>" +
+                                "<p><strong>Name:</strong> " + facility.contacts[i].firstName + " " + facility.contacts[i].lastName + "<br>" +
+                                "<strong>Title:</strong> " + facility.contacts[i].jobTitle + "<br>" +
+                                "<strong>Company:</strong> " + facility.contacts[i].companyName + "<br>" +
+                                "<strong>Email:</strong> " + "<a href='mailto:" + facility.contacts[i].emailAddress + "'>" + facility.contacts[i].emailAddress + "</a><br>" +
+                                "<strong>Phone:</strong> " + formatPhoneNumber(facility.contacts[i].phoneNumber) + "<br>" +
+                                "<strong>Address:</strong> " + facility.contacts[i].address1 + ", " + facility.contacts[i].address2 + "<br>" +
+                                facility.contacts[i].city + ", " + facility.contacts[i].stateAbbrev + " " + formatZip(facility.contacts[i].zipCode) + "</p>" +
+                            "</div>" +
+                            "<div class='box multi col' id='respDiv'>" +
+                                "<ul id='resp" + i + "'" + "></ul>" +
+                            "</div>" +
+                        "</div>"
+                    );
+                }
+                $("#contacts").html(contactsHTML.join(""));
+                var j;
+                for (i = 0; i < facility.contacts.length; i += 1) {
+                    var responsibilitiesHTML = ["<strong>Responsibilities:</strong>"];
+                    var uniqueRespArr = [];
+                    for (j = 0; j < facility.contacts[i].responsibilities.length; j += 1) {
+                        if (uniqueRespArr.indexOf(facility.contacts[i].responsibilities[j].roleDesc) === -1){
+                            uniqueRespArr.push(facility.contacts[i].responsibilities[j].roleDesc);
+                        }
+                    }
+                    for (j = 0; j < uniqueRespArr.length; j += 1) {
+                         if (uniqueRespArr[j] === "Primary") {
+                            responsibilitiesHTML.push("<li>" + uniqueRespArr[j] + " Designated Representative</li>");
+                        } else if (uniqueRespArr[j] === "Alternate") {
+                            responsibilitiesHTML.push("<li>" + uniqueRespArr[j] + " Designated Representative</li>");
+                        } else {
+                            responsibilitiesHTML.push("<li>"  + uniqueRespArr[j] + "</li>");
+                        }
+                    }
+                    $("#resp" + i).html(responsibilitiesHTML.join(""));
+                }
+                $("#contacts").css({"height":"75vh","overflow-y":"auto","overflow-x":"hidden"});
+
+            }
+            function displayOwners(facility) {
+                // Display the facility's owner(s).
+                function sorter(a, b){
+                    return parseInt(a.replace(/[^\d.]/g,"")) - parseInt(b.replace(/[^\d.]/g,""));
+                }
+
+                var owners = facility.owners;
+                var ownersHTML = [];
+                var names = [];
+                var i;
+                for (i = 0; i < owners.length; i += 1) {
+                    if (names.indexOf(owners[i].companyName) === -1) {
+                        names.push(owners[i].companyName);
+                    }
+                }
+                var j;
+                for (i = 0; i < names.length; i += 1) {
+                    var roles = [];
+                    
+                    for (j = 0; j < owners.length; j += 1) {
+                        if(names[i] == owners[j].companyName){
+                            if (roles.indexOf(owners[j].ownerDesc) === -1) {
+                                roles.push(owners[j].ownerDesc);
+                            }
+                        }
+                    }
+                    var k;
+                    var units = [];
+                    for (j = 0; j < roles.length; j += 1) {
+                        for (k = 0; k < owners.length; k += 1){
+                            if( roles[j] == owners[k].ownerDesc) {
+                                if (units.indexOf(owners[k].unitId) === -1) {
+                                    units.push(owners[k].unitId);
+                                }
+                            }
+                        }
+                    units.sort(sorter);
+                    ownersHTML.push("<h2 class='pane-title'>" + names[i] + "</h2>");
+                    ownersHTML.push("<p><strong>Role:</strong> " + roles[j] + "<br>");
+                    ownersHTML.push("<strong>Unit(s)</strong>: " + units.join(", ") + "</p>");
+                    }
+
+                }
+                $("#owners").html(ownersHTML.join(""));
+
+            }
+            function displayUnits(facility) {
+                unitsTable.clear();
+                $("#operatingUnitsToggle").prop("checked", true);
+                // Display the facility's unit(s).
+                var i;
+                for (i = 0; i < facility.units.length; i += 1) {
+                    unitsTable.row.add([
+                        facility.units[i].unitId,
+                        formatDate(facility.units[i].commOpDate),
+                        formatStatus(facility.units[i].status)
+                    ]);
+                }
+                unitsTable.draw();
+                $("#unitsTable tr td.operatingStatus").each(function () {
+                    if ($(this).html() !== "Operating") {
+                        $(this).closest("tr").hide();
+                    } else {
+                        $(this).closest("tr").show();
+                    }
+                });
+            }
+            function clearUnitInfo() {
+                $("#unitDetailInfo").html("");
+                $("#unitDetailFuels").html("");
+                $("#unitDetailControls").html("");
+                $("#unitDetailPrograms").html("");
+                $("#unitDetailGenerators").html("");
+                $("#unitDetails").hide();
+            }
+            function displayUnitInfo(facility, unit) {
+                if (facility.units.length > 0) {
+                    var unitInfo = {};
+                    var i;
+                    for (i = 0; i < facility.units.length; i += 1) {
+                        if (unit[0] === facility.units[i].unitId) {
+                            unitInfo = facility.units[i];
+                        }
+                    }
+                    $("#unitDetails").show();
+                    var controls = "";
+                    var programs = [];
+                    var fuels = ["<strong>Heat Input Capacity (mmBtu/hr):</strong> " + unitInfo.hi];
+                    $("#unitDetailInfo").html(
+                        "<p><strong style='font-size:1.3em'>Unit ID: " + unitInfo.unitId + "</strong><hr>" +
+                        "<strong>Status:</strong> " + formatStatus(unitInfo.status) + "</p><br><hr>");
+                    if (unitInfo.fuels.length > 0) {
+                        for (i = 0; i < unitInfo.fuels.length; i += 1) {
+                            fuels.push("<strong>" + unitInfo.fuels[i].indicatorDescription + " Fuel:</strong> " + unitInfo.fuels[i].fuelDesc);
+                        }
+                        $("#unitDetailFuels").html("<p>" + fuels.join("<br>") + "</p><hr>");
+                    }
+                    if (unitInfo.controls.length > 0) {
+                        for (i = 0; i < unitInfo.controls.length; i += 1) {
+                            controls += "<strong>" + formatChemicalSymbols(unitInfo.controls[i].parameterCode) + " Control:</strong> " + unitInfo.controls[i].controlDesc + "<br>";
+                        }
+                        $("#unitDetailControls").html("<p>" + controls + "</p><hr>");
+                    }
+                    if (unitInfo.programs.length > 0) {
+                        for (i = 0; i < unitInfo.programs.length; i += 1) {
+                            programs.push("<li>" + formatProgram(unitInfo.programs[i].description) + "</li>");
+                        }
+                        $("#unitDetailPrograms").html("<p><strong>" + "Programs:</strong></p>" + "<ul>" + programs.join("") + "</ul><hr>");
+                    }
+                    if (unitInfo.generators.length > 0) {
+                        var generators = [];
+                        for (i = 0; i < unitInfo.generators.length; i += 1) {
+                            generators.push("<p><strong>Generator ID: </strong>" + unitInfo.generators[i].generatorId + "<br>");
+                            generators.push("<strong>Nameplate Capacity (MW): </strong>" + formatLargeNumbers(unitInfo.generators[i].nameplateCapacity) + "</p><hr>");
+                        }
+                        $("#unitDetailGenerators").html(generators.join(""));
+                    }
+                    $("#unitDetails").css({"height":"75vh","overflow-y":"auto","overflow-x":"hidden"});
+                }
+            }
+            function displayMonitoringPlans(facility) {
+                monitoringPlansTable.clear();
+                $("#activePlansToggle").prop("checked", true);
+                var monitoringPlans = facility.monitoringPlans;
+                var i;
+                for (i = 0; i < monitoringPlans.length; i += 1) {
+                    monitoringPlansTable.row.add([
+                        createUnitStackName(monitoringPlans[i].monitoringLocations),
+                        monitoringPlans[i].status,
+                        formatYYYYQ(monitoringPlans[i].beginYearQuarter),
+                        formatYYYYQ(monitoringPlans[i].endYearQuarter),
+                        "<a style='text-decoration: none; font-size: 1.5em;' href='#'>&#9432;</a>"
+                    ]);
+                }
+                monitoringPlansTable.draw();
+
+                $("#monitoringPlansTable tr td.status").each(function () {
+                    if ($(this).html() !== "Active") {
+                        $(this).closest("tr").hide();
+                    } else {
+                        $(this).closest("tr").show();
+                    }
+                });
+
+                $(".center-align").css("text-align", "center");
+                //$("#monitoringPlans").css({"height":"75vh","overflow-y":"auto","overflow-x":"hidden"});
+            }
+
+
+            facilitiesTable.on("click", "tr", function (event) {
+                $("#overviewHome").hide("slow");
+                $("#facilityDetails").show();
+                // Get the selected facility"s data.
+                var selectedRow = facilitiesTable.row(this).data();
+                var index = facilities.map(function(o) { return o.orisCode; }).indexOf(selectedRow[0]);
+                selectedFacility = facilities[index];
+                // Highlight the selected row.
+                $(facilitiesTable.rows().nodes()).children().removeClass("blue");
+                $(this).children().addClass("blue");
+                // Clear any unit info.
+                clearUnitInfo();
+                // Load the first tab's page.
+                $("#tabsnav > li:nth-child(1) > a").addClass("active");
+                $("#tabsnav > li:nth-child(1) > a").trigger("click");
+                // Display the data.
+                displayBasicFacilityInfo(selectedFacility);
+                stateLayerGroup = L.layerGroup();
+                getRelatedFacilities(selectedFacility);
+                displayContacts(selectedFacility);
+                displayOwners(selectedFacility);
+                displayUnits(selectedFacility);
+                if($("#unitsTable > tbody > tr > td.operatingStatus").eq(0).html() === "Operating") {
+                    $("#unitsTable > tbody > tr").eq(0).trigger("click");
+                } else {
+                    $("#unitsTable > tbody > tr > td.operatingStatus").each(function(){
+                        if($(this).html() === "Operating"){
+                            $(this).closest("tr").trigger("click");
+                            return false;
+                        }
+                    })
+                }
+                displayMonitoringPlans(selectedFacility);
+                $("#showOneFacility").click();
+            });
+            unitsTable.on("click", "tr", function (event) {
+                // Get the selected unit's data.
+                var selectedUnit = unitsTable.row(this).data();
+                // Highlight the selected row.
+                $(unitsTable.rows().nodes()).children().removeClass("green");
+                $(this).children().addClass("green");
+                // Display unit information.
+                displayUnitInfo(selectedFacility, selectedUnit);
+            });
+            monitoringPlansTable.on("click", "tr", function (event) {
+                // Get the selected unit's data.
+                var selectedPlan = monitoringPlansTable.row(this).data();
+                // Highlight the selected row.
+                $(monitoringPlansTable.rows().nodes()).removeClass("green");
+                $(this).addClass("green");
+                getMonitoringPlan(selectedPlan, selectedFacility.name, selectedFacility.orisCode);
+            });
+        }
+    });
+
+    $("input[type=radio][name=showFacilities]").on("change", function() {
+        var j;
+        var mpList = [];
+        for (j = 0; j < selectedFacility.monitoringPlans.length; j += 1) {
+            var unitStackName = createUnitStackName(selectedFacility.monitoringPlans[j].monitoringLocations);
+            var status = selectedFacility.monitoringPlans[j].status;
+            var beginYearQuarter = formatYYYYQ(selectedFacility.monitoringPlans[j].beginYearQuarter);
+            if(status == "Active") {
+                mpList.push("<li data-unitStackName='" + unitStackName + "' data-status='" + status + "' data-beginYearQuarter='" + beginYearQuarter + "'><a href='#'>" + unitStackName +"</a></li>");
+            }
+        }
+        var coordinates = [selectedFacility.geographicLocation.latitude, selectedFacility.geographicLocation.longitude];
+        marker = L.marker(coordinates).addTo(facilityMap)
+            .bindPopup("<strong><span id='popUpFacilityName'>" + selectedFacility.name + "</span></strong><br>" + "<strong>ORIS Code</strong>: " + "<span id='popUpOris'>" + selectedFacility.orisCode + "</span><br>" + "<strong>Latitude</strong>: " + selectedFacility.geographicLocation.latitude + "<br>" + "<strong>Longitude</strong>: " + selectedFacility.geographicLocation.longitude + "<br>" + "<strong>Active Monitoring Plans: </strong><br><button class='showPopUpPlans'>Show</button><ul style='display:none; 'class='popUpPlans'>" + mpList.join("") +"</ul>");
+
+        if(this.value == "oneFacility") {
+            facilityMap.setView(coordinates, 15);
+        } else if (this.value == "stateFacilities") {
+            facilityMap.setView(coordinates, 6);
+            marker.openPopup();
+        }
+    });
+    // Close the modal.
+    $("#closeMonPlan").on("click", function (e) {
+        $("#modal").hide();
+        $("#overlay").hide();
+        $("#allContent").show();
+    });
+    // Main Tabs
+    $("#tabs > div").hide(); // hide all child divs
+    $("#tabs div:first").show(); // show first child dive
+    $("#tabsnav li:first").addClass("active");
+    $(".menu-internal").click(function () {
+        $("#tabsnav li").removeClass("active");
+        var currentTab = $(this).attr("href");
+        $("#tabsnav li a[href='" + currentTab + "']").parent().addClass("active");
+        $("#tabs > div").hide();
+        if (currentTab !== "#location") {
+            $("#facilityMap").hide();
+        } else {
+            $("#facilityMap").show();
+        }
+        $(currentTab).show();
+        return false;
+    });
+    // Create a bookmarkable tab link
+    var hash = window.location.hash;
+    var elements = $("a[href= ' " + hash + " ' ]"); // look for tabs that match the hash; NOTE: remove the spaces around the quote marks or your code will not work!
+    if (elements.length === 0) { // if there aren't any, then
+        $("ul.tabs li:first").addClass("active").show(); // show the first tab
+    } else {
+        $("html, body").scrollTop(200);
+        elements.click();
+    } // else, scroll back to top (if needed) and open the tab in the hash
+    // Create toggle for displaying only operating units or all units.
+    $("#operatingUnitsToggle").on("change", function () {
+        if ($(this).prop("checked")) {
+            $("#unitsTable tr td.operatingStatus").each(function () {
+                if ($(this).html() !== "Operating") {
+                    $(this).closest("tr").hide();
+                } else {
+                    $(this).closest("tr").show();
+                }
+            });
+        } else {
+            $("#unitsTable tr").show();
+        }
+    });
+    // Create toggle for displaying only active plans or all plans.
+    $("#activePlansToggle").on("change", function () {
+        if ($(this).prop("checked")) {
+            $("#monitoringPlansTable tr td.status").each(function () {
+                if ($(this).html() !== "Active") {
+                    $(this).closest("tr").hide();
+                } else {
+                    $(this).closest("tr").show();
+                }
+            });
+        } else {
+            $("#monitoringPlansTable tr").show();
+        }
+    });
+    $("#printPlan").on("click", function () {
+        window.print();
+    });
+    $("#downloadButton").on("click", function () {
+        window.location = "#download";
+    });
+    $("#inactivePartsToggle").on("change", function() {
+        // Do stuff here.
+        if ($(this).prop("checked")){
+            $("#mainReport tr").show();
+        } else {
+            $("#mainReport tr td.rowStatus").each(function () {
+                if ($(this).html() !== "") {
+                    $(this).closest("tr").hide();
+                }
+            });
+        }
+    });
+    $("#dataDisplayToggle input[type=radio][name=radios]").on("change", function() {
+        if (this.value === "code") {
+            $(".code").show();
+            $(".description").hide();
+        } else if (this.value === "description") {
+            $(".description").show();
+            $(".code").hide();
+        }
+    });
+    $("#showOverview").on("click", function() {
+        $("#facilitiesTable tbody tr").children().removeClass("blue");
+        $("#facilityDetails").hide();
+        $("#overviewHome").show();
+    });
+
+});
+</script>

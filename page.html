@@ -1,0 +1,823 @@
+<div id="loadingMessage">&nbsp;</div>
+
+<div class="row cols-2" id="allContent">
+	<div class="size-2of5 col" id="leftPane">
+		<p><strong>Instructions:</strong> click on a facility name in the table to display detailed information.</p>
+
+		<table cellspacing="0" class="noborder hover" id="facilitiesTable" width="100%">
+			<thead>
+				<tr>
+					<th>ORIS Code</th>
+					<th>Facility Name</th>
+					<th>State</th>
+					<th>County</th>
+					<th>Contacts</th>
+					<th>Fuels</th>
+					<th>Programs</th>
+					<th>Controls</th>
+				</tr>
+			</thead>
+			<tbody></tbody>
+		</table>
+	</div>
+
+	<div class="size-3of5 col">
+		<div id="overviewHome">
+			<h3>Overview</h3>
+
+			<div>
+				<p>This tool provides access to information for sources affected by <a href="https://www.ecfr.gov/cgi-bin/text-idx?tpl=/ecfrbrowse/Title40/40cfr75_main_02.tpl">40 CFR Part 75</a>. Location, ownership and contact information, unit attributes, and monitoring plan data is presented for each facility.</p>
+
+				<h4>What is in a monitoring plan?</h4>
+
+				<p>The monitoring plan describes how a facility monitors its emissions. Monitoring plan data define relationships between stacks, pipes, and units; specify locations at a facility from which emissions are monitored; and identify monitoring equipment including the individual system components. Monitoring plan data also provide characteristics of operations and physical and unit characteristics such as stack height, cross sectional area, fuel type, air pollution control devices, and size of the unit(s).</p>
+
+				<h4>How to Access</h4>
+
+				<p>To view more information, select a facility from the list on the left. A series of tabs will be displayed. To view the monitoring plan, open the "Monitoring Plans" tab and select a unit and/or stack from the list.</p>
+
+				<h4>Sorting and Filtering</h4>
+
+				<p>The facility list can be sorted in ascending or descending order by selecting a column heading. Additionally, the facility list can be dynamically filtered according to the search box content. Sorting and filtering applies to ORIS Code, Facility Name, and State.</p>
+
+				<div class="row cols-2">
+					<div class="col">
+						<h4>Support</h4>
+
+						<p>For technical support with the monitoring plans, please contact your <a href="/airmarkets/continuous-emissions-monitoring-contacts">regional analyst</a>. For any issues you encounter with this application, please email <a href="mailto:monitoringplans@epa.gov">monitoringplans@epa.gov</a>.</p>
+					</div>
+
+					<div class="box multi related-info col">
+						<h3 class="pane-title">More Resources</h3>
+
+						<div class="pane-content">
+							<ul>
+								<li><a href="https://www.epa.gov/airmarkets/field-audit-checklist-tool-fact">Field Audit Checklist Tool (FACT)</a></li>
+								<li><a href="https://www.epa.gov/airmarkets/clean-air-markets-emissions-monitoring">Emissions Monitoring Home</a></li>
+								<li><a href="https://www.epa.gov/airmarkets">Clean Air Markets Home</a></li>
+							</ul>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div id="facilityDetails">
+			<div id="facilityHeader">
+				<div style="text-align: center;"><button id="showOverview">ⓘ Display Overview</button></div>
+
+				<div alt="Facility name" id="facilityName">Facility name</div>
+			</div>
+
+			<div id="tabs">
+				<ul class="tabs" id="tabsnav">
+					<li><a class="menu-internal" href="#location">Location</a></li>
+					<li><a class="menu-internal" href="#contacts">Contacts</a></li>
+					<li><a class="menu-internal" href="#units">Units</a></li>
+					<li><a class="menu-internal" href="#monitoringPlans">Monitoring Plans</a></li>
+				</ul>
+
+				<div id="location">
+					<div id="basicFacilityInfo">&nbsp;</div>
+
+					<div id="facilityMap">&nbsp;</div>
+
+					<div class="form-item form-type-radios form-item-radios" id="optionsDiv">
+						<h4>Map Options</h4>
+						<label for="showFacilities">Zoom to:</label>
+
+						<div class="form-radios" id="showFacilities"><input checked="checked" class="form-radio" id="showOneFacility" name="showFacilities" type="radio" value="oneFacility"> <label for="showOneFacility" id="showOneLabel">This facility</label> <input class="form-radio" id="showStateFacilities" name="showFacilities" type="radio" value="stateFacilities"> <label for="showStateFacilities" id="showStateLabel">This State's facilities</label></div>
+					</div>
+				</div>
+
+				<div id="contacts">&nbsp;</div>
+
+				<div id="units">
+					<div class="row cols-2" id="unitPage">
+						<div class="col" id="unitList">
+							<p><strong>Instructions:</strong> click on a unit ID in the table to display detailed information.</p>
+
+							<div class="form-checkboxes">
+								<div class="form-item form-type-checkbox"><input class="form-checkbox" id="operatingUnitsToggle" type="checkbox"><label class="option" for="operatingUnitsToggle"> Show operating units only</label></div>
+							</div>
+
+							<table cellspacing="0" class="noborder hover" id="unitsTable" width="100%">
+								<thead>
+									<tr>
+										<th>Unit ID</th>
+										<th>Commence Operation Date</th>
+										<th>Status</th>
+									</tr>
+								</thead>
+								<tbody></tbody>
+							</table>
+						</div>
+
+						<div class="box multi col" id="unitDetails">
+							<div id="unitDetailInfo">&nbsp;</div>
+
+							<div id="unitDetailFuels">&nbsp;</div>
+
+							<div id="unitDetailControls">&nbsp;</div>
+
+							<div id="unitDetailPrograms">&nbsp;</div>
+
+							<div id="unitDetailGenerators">&nbsp;</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="tab-content" id="monitoringPlans">
+					<p><strong>Instructions:</strong> click on a unit/stack name in the table to open a monitoring plan.</p>
+
+					<div class="form-checkboxes">
+						<div class="form-item form-type-checkbox"><input class="form-checkbox" id="activePlansToggle" type="checkbox"><label class="option" for="activePlansToggle"> Show active plans only</label></div>
+					</div>
+
+					<table cellspacing="0" class="noborder hover" id="monitoringPlansTable" width="100%">
+						<thead>
+							<tr>
+								<th>Unit/stack name</th>
+								<th>Status</th>
+								<th>Begin Year, Quarter</th>
+								<th>End Year, Quarter</th>
+								<th>View</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="overlay" id="overlay">&nbsp;</div>
+
+<div class="modal" id="modal">
+	<div class="modal-content">
+		<div class="row cols-2">
+			<div class="size-3of5 col">
+				<div id="monPlanHeader">&nbsp;</div>
+				<button id="closeMonPlan">← Back to Search</button>&nbsp;&nbsp;<button id="printPlan">🖶 Print</button>&nbsp;&nbsp;<button id="downloadButton">↓ Download</button></div>
+
+			<div class="size-2of5 col box special" id="monPlanLocation">
+				<h3 class="pane-title">Location</h3>
+
+				<div class="pane-content">&nbsp;</div>
+			</div>
+		</div>
+
+		<hr>On this page:
+		<div class="row cols-4">
+			<div class="col">
+				<ul>
+					<li><a href="#monitoringLocation">Monitoring location</a></li>
+					<li><a href="#unitInformation">Unit information</a></li>
+					<li><a href="#unitFuels">Unit fuels</a></li>
+					<li><a href="#unitControls">Unit controls</a></li>
+				</ul>
+			</div>
+
+			<div class="col">
+				<ul>
+					<li><a href="#monMethod">Monitoring methods</a></li>
+					<li><a href="#monSys">Monitoring systems</a></li>
+					<li><a href="#spanRangeFormulas">Span, range, and formulas</a></li>
+					<li><a href="#loadOpInfo">Load and operating information</a></li>
+				</ul>
+			</div>
+
+			<div class="col">
+				<ul>
+					<li><a href="#monitoringDefaults">Monitoring defaults</a></li>
+					<li><a href="#qualifications">Qualifications</a></li>
+					<li><a href="#comments">Comments</a></li>
+				</ul>
+			</div>
+
+			<div class="col">
+				<div class="row cols-2">
+					<div class="col size-3of5 form-item form-type-radios form-item-radios"><label for="dataDisplayToggle">Display data as:</label>
+
+						<div class="form-radios" id="dataDisplayToggle">
+							<div class="form-item form-type-radio form-item-radios"><input checked="checked" class="form-radio" id="radioDesc" name="radios" type="radio" value="description"><label class="option" for="radioDesc">Descriptions</label></div>
+
+							<div class="form-item form-type-radio form-item-radios"><input class="form-radio" id="radioCode" name="radios" type="radio" value="code"><label class="option" for="radioCode">Reported codes</label></div>
+						</div>
+					</div>
+
+					<div class="col size-2of5 form-checkboxes">
+						<div class="form-item form-type-checkbox"><input checked="checked" class="form-checkbox" id="inactivePartsToggle" type="checkbox"><label class="option" for="inactivePartsToggle">Show inactive components</label></div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<hr>
+		<div id="mainReport">
+			<div id="monitoringLocation">
+				<div>
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Reporting frequency</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="noborder stripe hover" id="reportingFrequencyTable" width="100%">
+						<thead>
+							<tr>
+								<th>Monitoring plan location ID(s)</th>
+								<th>Reporting frequency code</th>
+								<th>Reporting frequency</th>
+								<th>Begin quarter</th>
+								<th>End quarter</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+
+				<hr>
+				<div>
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Monitoring location attributes</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="monitoringLocationAttributesTable" width="100%">
+						<thead>
+							<tr>
+								<th>Duct indicator</th>
+								<th>Ground elevation (ft)</th>
+								<th>Stack height (ft)</th>
+								<th>Cross area exit (ft<sup>2</sup>)</th>
+								<th>Cross area flow</th>
+								<th>Material code</th>
+								<th>Material</th>
+								<th>Shape code</th>
+								<th>Shape</th>
+								<th>Begin date</th>
+								<th>End date</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+
+				<hr>
+				<div>
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Stack/pipes and unit relationships</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="stackPipesUnitRelationshipsTable" width="100%">
+						<thead>
+							<tr>
+								<th>Associated unit</th>
+								<th>Bypass stack indicator</th>
+								<th>Activation date</th>
+								<th>Retirement date</th>
+								<th>Begin date</th>
+								<th>End date</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+			</div>
+
+			<hr>
+			<div id="unitInformation">
+				<div>
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Unit operations</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="unitOperationsTable" width="100%">
+						<thead>
+							<tr>
+								<th>Commence operation date</th>
+								<th>Commercial operation date</th>
+								<th>Boiler/turbine type code</th>
+								<th>Boiler/turbine type</th>
+								<th>Boiler/turbine begin date</th>
+								<th>Boiler/turbine end date</th>
+								<th>Max heat input (mmBtu)</th>
+								<th>Heat input begin date</th>
+								<th>Heat input end date</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+
+				<hr>
+				<div>
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Unit programs</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="unitProgramsTable" width="100%">
+						<thead>
+							<tr>
+								<th>Program code</th>
+								<th>Program</th>
+								<th>Unit class code</th>
+								<th>Unit class</th>
+								<th>Certification begin date</th>
+								<th>Certification deadline</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+			</div>
+
+			<hr>
+			<div id="unitFuels">
+				<div class="row cols-2">
+					<div class="size-4of5 col">
+						<h2>Unit fuels</h2>
+					</div>
+
+					<div class="size-1of5 col">
+						<p class="pagetop"><a href="#top">Top of page</a></p>
+					</div>
+				</div>
+
+				<table cellspacing="0" class="stripe hover noborder" id="unitFuelsTable" width="100%">
+					<thead>
+						<tr>
+							<th>Fuel type code</th>
+							<th>Fuel type</th>
+							<th>Fuel indicator code</th>
+							<th>Fuel indicator</th>
+							<th>Demonstration method for GCV code</th>
+							<th>Demonstration method for GCV</th>
+							<th>Demonstration method for daily sulfur code</th>
+							<th>Demonstration method for daily sulfur</th>
+							<th>Ozone season indicator</th>
+							<th>Begin date</th>
+							<th>End date</th>
+						</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</div>
+
+			<hr>
+			<div id="unitControls">
+				<div class="row cols-2">
+					<div class="size-4of5 col">
+						<h2>Unit controls</h2>
+					</div>
+
+					<div class="size-1of5 col">
+						<p class="pagetop"><a href="#top">Top of page</a></p>
+					</div>
+				</div>
+
+				<table cellspacing="0" class="stripe hover noborder" id="unitControlsTable" width="100%">
+					<thead>
+						<tr>
+							<th>Parameter code</th>
+							<th>Parameter</th>
+							<th>Control equipment code</th>
+							<th>Control equipment</th>
+							<th>Original indicator</th>
+							<th>Seasonal indicator</th>
+							<th>Installation date</th>
+							<th>Optimization date</th>
+							<th>Retirement date</th>
+						</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</div>
+
+			<hr>
+			<div id="monMethod">
+				<div id="monMethodsDiv">
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Monitoring methods</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="monitoringMethodsTable" width="100%">
+						<thead>
+							<tr>
+								<th>Parameter code</th>
+								<th>Parameter</th>
+								<th>Methodology code</th>
+								<th>Methodology</th>
+								<th>Substitute data approach code</th>
+								<th>Substitute data approach</th>
+								<th>Bypass approach code</th>
+								<th>Bypass approach</th>
+								<th>Begin time</th>
+								<th>End time</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+
+					<hr>
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>MATS supplemental monitoring methods</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="matsMonitoringMethodsTable" width="100%">
+						<thead>
+							<tr>
+								<th>Parameter code</th>
+								<th>Parameter</th>
+								<th>Methodology code</th>
+								<th>Methodology</th>
+								<th>Begin time</th>
+								<th>End time</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+			</div>
+
+			<hr>
+			<div id="monSys">
+				<div>
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Monitoring systems</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<div id="monSystemDiv">&nbsp;</div>
+				</div>
+			</div>
+
+			<hr>
+			<div id="spanRangeFormulas">
+				<div id="spanValuesdiv">
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Span values</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="spanValuesTable" width="100%">
+						<thead>
+							<tr>
+								<th>Component type code</th>
+								<th>Component type</th>
+								<th>Scale code</th>
+								<th>Scale</th>
+								<th>Method code</th>
+								<th>Method</th>
+								<th>MPC/MPF</th>
+								<th>MEC</th>
+								<th>Span value</th>
+								<th>Full-scale range</th>
+								<th>Units of measure code</th>
+								<th>Units of measure</th>
+								<th>Flow span value (scfh)</th>
+								<th>Scale transition point</th>
+								<th>Default high-range value</th>
+								<th>Flow full scale range</th>
+								<th>Begin time</th>
+								<th>End time</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+
+				<hr>
+				<div id="sysFuelFlowDiv">
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Monitoring system fuel flow</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="systemFuelFlowTable" width="100%">
+						<thead>
+							<tr>
+								<th>System ID</th>
+								<th>Fuel code</th>
+								<th>Fuel</th>
+								<th>Max fuel flow rate</th>
+								<th>Units of measure code</th>
+								<th>Units of measure</th>
+								<th>Source code</th>
+								<th>Source</th>
+								<th>Begin time</th>
+								<th>End time</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+
+				<hr>
+				<div id="analyzerRangeDiv">
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Analyzer Range Data</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="analyzerRangesTable" width="100%">
+						<thead>
+							<tr>
+								<th>Component type code</th>
+								<th>Component type</th>
+								<th>Component ID</th>
+								<th>Range code</th>
+								<th>Range</th>
+								<th>Dual Range indicator</th>
+								<th>Begin time</th>
+								<th>End time</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+
+				<hr>
+				<div id="emissionsFormulasDiv">
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Emissions Formulas</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="emissionsFormulasTable" width="100%">
+						<thead>
+							<tr>
+								<th>Parameter code</th>
+								<th>Parameter</th>
+								<th>Formula ID</th>
+								<th>Formula code</th>
+								<th>Formula description</th>
+								<th>Formula</th>
+								<th>Begin Time</th>
+								<th>End Time</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+			</div>
+
+			<hr>
+			<div id="loadOpInfo">
+				<div id="rectDuctDiv">
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Rectangular duct wall adjustment factor</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="rectangularDuctTable" width="100%">
+						<thead>
+							<tr>
+								<th>WAF determined date</th>
+								<th>WAF effective date/time</th>
+								<th>WAF method code</th>
+								<th>WAF method code description</th>
+								<th>WAF value</th>
+								<th>No. of test runs</th>
+								<th>No. of traverse pts. WAF</th>
+								<th>No. of test ports</th>
+								<th>No. of traverse pts. Ref</th>
+								<th>Duct width</th>
+								<th>Duct depth</th>
+								<th>WAF end date/time</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+
+				<hr>
+				<div id="loadOperatingInfoDiv">
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Unit/stack/pipe load and operating information</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="loadOperatingInfoTable" width="100%">
+						<thead>
+							<tr>
+								<th>Max hourly load</th>
+								<th>Units of measure code</th>
+								<th>Units of measure</th>
+								<th>Upper bound of range of operation</th>
+								<th>Lower bound of range of operation</th>
+								<th>Normal operation level code</th>
+								<th>Normal operation level</th>
+								<th>Second operation level code</th>
+								<th>Second operation level</th>
+								<th>Second normal indicator</th>
+								<th>Load analysis date</th>
+								<th>Begin time</th>
+								<th>End time</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+			</div>
+
+			<hr>
+			<div id="monitoringDefaults">
+				<div id="monDefaultsDiv">
+					<div class="row cols-2">
+						<div class="size-4of5 col">
+							<h2>Monitoring defaults</h2>
+						</div>
+
+						<div class="size-1of5 col">
+							<p class="pagetop"><a href="#top">Top of page</a></p>
+						</div>
+					</div>
+
+					<table cellspacing="0" class="stripe hover noborder" id="monitoringDefaultsTable" width="100%">
+						<thead>
+							<tr>
+								<th>Parameter code</th>
+								<th>Parameter</th>
+								<th>Value</th>
+								<th>Units of measure code</th>
+								<th>Units of measure</th>
+								<th>Purpose code</th>
+								<th>Purpose</th>
+								<th>Fuel type code</th>
+								<th>Fuel type</th>
+								<th>Operating condition code</th>
+								<th>Operating condition</th>
+								<th>Source of value code</th>
+								<th>Source of value</th>
+								<th>Begin time</th>
+								<th>End time</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+			</div>
+
+			<hr>
+			<div id="qualifications">
+				<div class="row cols-2">
+					<div class="size-4of5 col">
+						<h2>Qualification</h2>
+					</div>
+
+					<div class="size-1of5 col">
+						<p class="pagetop"><a href="#top">Top of page</a></p>
+					</div>
+				</div>
+
+				<table cellspacing="0" class="stripe hover noborder" id="qualificationsTable" width="100%">
+					<thead>
+						<tr>
+							<th>Qualification type code</th>
+							<th>Qualification type</th>
+							<th>Begin date</th>
+							<th>End date</th>
+							<th>Qualification year</th>
+							<th>Average %</th>
+							<th>Year 1</th>
+							<th>Year 1 data type code</th>
+							<th>Year 1 data type</th>
+							<th>Year 1 %</th>
+							<th>Year 2</th>
+							<th>Year 2 data type code</th>
+							<th>Year 2 data type</th>
+							<th>Year 2 %</th>
+							<th>Year 3</th>
+							<th>Year 3 data type code</th>
+							<th>Year 3 data type</th>
+							<th>Year 3 %</th>
+						</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</div>
+
+			<hr>
+			<div id="comments">
+				<div class="row cols-2">
+					<div class="size-4of5 col">
+						<h2>Comments</h2>
+					</div>
+
+					<div class="size-1of5 col">
+						<p class="pagetop"><a href="#top">Top of page</a></p>
+					</div>
+				</div>
+
+				<table cellspacing="0" class="stripe hover noborder" id="commentsTable" width="100%">
+					<thead>
+						<tr>
+							<th>Unit/stack pipe ID</th>
+							<th>Comments</th>
+							<th>Begin date</th>
+							<th>End date</th>
+						</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</div>
+
+			<hr>
+			<div id="download">
+				<div class="row cols-2">
+					<div class="size-4of5 col">
+						<h2>Download</h2>
+					</div>
+
+					<div class="size-1of5 col">
+						<p class="pagetop"><a href="#top">Top of page</a></p>
+					</div>
+				</div>
+
+				<ul class="menu pipeline">
+					<li class="menu-item" id="linkToInstructions"><a href="https://www.epa.gov/airmarkets/clean-air-markets-monitoring-plans-part-75-sources">Instructions to view XML Monitoring Plans</a></li>
+					<li class="menu-item" id="linkToXML">&nbsp;</li>
+					<li class="menu-item" id="linkToStyleSheet">&nbsp;</li>
+					<li class="menu-item" id="linkToCodes">&nbsp;</li>
+				</ul>
+			</div>
+		</div>
+	</div>
+</div>
